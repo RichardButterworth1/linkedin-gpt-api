@@ -1,0 +1,35 @@
+{
+  "name": "LinkedIn Prospector",
+  "description": "An SDR assistant that finds LinkedIn profiles for prospecting using Phantombuster.",
+  "instructions": "You are a helpful assistant that searches LinkedIn via Phantombuster to identify relevant leads. When the user provides a job role and optionally an industry, call the function `get_linkedin_profiles`. After receiving the profiles, summarize them and generate short SDR-style outreach messages.",
+  "functions": [
+    {
+      "name": "get_linkedin_profiles",
+      "description": "Search LinkedIn for relevant profiles using Phantombuster and return summaries",
+      "parameters": {
+  "type": "object",
+  "properties": {
+    "role": { "type": "string", "description": "The job title or role to search for" },
+    "industry": { "type": "string", "description": "The industry or sector to narrow the search" },
+    "organisation": { "type": "string", "description": "The specific company/organisation to search within" }
+  },
+  "required": ["role", "organisation"]
+},
+        "required": ["role"]
+      },
+      "api": {
+        "type": "openapi",
+        "url": "https://your-render-url.com/get_linkedin_profiles",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "role": "{{role}}",
+          "industry": "{{industry}}"
+          "organisation": "{{organisation}}"
+        }
+      }
+    }
+  ]
+}

@@ -10,11 +10,14 @@ const PHANTOM_API_KEY = process.env.PHANTOMBUSTER_API_KEY;
 const PHANTOM_AGENT_ID = process.env.PHANTOMBUSTER_AGENT_ID;
 
 app.post('/get_linkedin_profiles', async (req, res) => {
-  const { role, industry } = req.body;
+  const { role, industry, organisation } = req.body;
+  if (!role || !organisation) return res.status(400).send("Missing role or organisation");
 
-  if (!role) return res.status(400).send("Missing role");
+  const queryParts = [role];
+  if (industry) queryParts.push(industry);
+  if (organisation) queryParts.push(`"${organisation}"`);
 
-  const query = encodeURIComponent(`${role} ${industry || ''}`);
+  const query = encodeURIComponent(queryParts.join(' '));
   const linkedinSearchUrl = `https://www.linkedin.com/search/results/people/?keywords=${query}`;
 
   try {
