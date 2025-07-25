@@ -15,18 +15,16 @@
   },
   "required": ["role", "organisation"]
 },
-        "required": ["role"]
-      },
       "api": {
         "type": "openapi",
-        "url": "https://your-render-url.com/get_linkedin_profiles",
+        "url": "https://linkedin-gpt-api-1b.onrender.com/get_linkedin_profiles",
         "method": "POST",
         "headers": {
           "Content-Type": "application/json"
         },
         "body": {
           "role": "{{role}}",
-          "industry": "{{industry}}"
+          "industry": "{{industry}}",
           "organisation": "{{organisation}}"
         }
       }

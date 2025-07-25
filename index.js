@@ -9,6 +9,9 @@ app.use(express.json());
 const PHANTOM_API_KEY = process.env.PHANTOMBUSTER_API_KEY;
 const PHANTOM_AGENT_ID = process.env.PHANTOMBUSTER_AGENT_ID;
 
+app.get('/get_linkedin_profiles', (req, res) => {
+  res.status(405).send('Use POST');
+
 app.post('/get_linkedin_profiles', async (req, res) => {
   const { role, industry, organisation } = req.body;
   if (!role || !organisation) return res.status(400).send("Missing role or organisation");
@@ -40,8 +43,25 @@ app.post('/get_linkedin_profiles', async (req, res) => {
 
     const containerId = launch.data.containerId;
 
-    // Wait for the phantom to finish
-    await new Promise(resolve => setTimeout(resolve, 12000));
+// Poll the container status until it's finished (or error)
+const POLL_INTERVAL = 5000;  // ms
+let finished = false;
+while (!finished) {
+  const statusRes = await axios.get(
+    `https://api.phantombuster.com/api/v2/containers/fetch-status?id=${containerId}`,
+    { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
+  );
+  const { status } = statusRes.data;
+  if (status === 'finished' || status === 'done') {
+    finished = true;
+  } else if (status === 'failed') {
+    throw new Error('PhantomBuster agent execution failed');
+  } else {
+    // not done yet → wait and try again
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+  }
+}
+
 
     const result = await axios.get(
       `https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}`,
