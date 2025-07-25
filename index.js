@@ -48,11 +48,9 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     while (!finished) {
     // Poll until the container’s output is available
     const statusRes = await axios.get(
-      `https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}`,
+      `https://api.phantombuster.com/api/v2/agents/fetch-output?id=${PHANTOM_AGENT_ID}`,
       { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
     );
-    // your agent can write a “status” field into the result object,
-    // or else you can treat any 200 response here as “done.”
     const status = statusRes.data.status || 'done';
       if (status === 'finished' || status === 'done') {
         finished = true;
