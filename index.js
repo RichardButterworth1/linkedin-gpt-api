@@ -33,7 +33,7 @@ const launchRes = await axios.post(
   'https://api.phantombuster.com/api/v2/agents/launch',
   {
     id: PHANTOM_AGENT_ID,
-    argument: { role, industry, organisation, numberOfProfiles: 10 }
+    argument: JSON.stringify({ role, industry, organisation, numberOfProfiles: 10 })
   },
   {
     params: { id: PHANTOM_AGENT_ID },
