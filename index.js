@@ -36,8 +36,7 @@ const launch = await axios.post(
     'X-Phantombuster-Key-1': PHANTOM_API_KEY,
     'Content-Type': 'application/json'
   }
-}
-+ );
+});
     const containerId = launch.data.containerId;
 
     // ————— Poll until the container is finished —————
