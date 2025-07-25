@@ -16,34 +16,31 @@ function assertEnv() {
   if (!PHANTOM_AGENT_ID) throw new Error('Missing PHANTOMBUSTER_AGENT_ID');
 }
 
-// Health check
+// --- Health
 app.get('/', (_req, res) => res.send('LinkedIn Profile API is running.'));
 app.get('/get_linkedin_profiles', (_req, res) => res.status(405).send('Use POST'));
 
-// ---------- Phantombuster helpers ----------
-
-// v1 launch ONLY (no more v2 launch validator headaches)
-async function launchV1(args) {
-  const res = await axios.post(
+// --- Use ONLY v1 to launch (so the “id required” validator can never fire)
+async function launchViaV1(args) {
+  const resp = await axios.post(
     `https://api.phantombuster.com/api/v1/agent/${PHANTOM_AGENT_ID}/launch`,
     {
       output: 'json',
+      // v1 expects stringified argument
       argument: JSON.stringify(args)
     },
     {
       headers: {
         'X-Phantombuster-Key-1': PHANTOM_API_KEY,
         'Content-Type': 'application/json'
-      },
-      validateStatus: () => true
+      }
     }
   );
 
-  const containerId = res.data?.data?.containerId || res.data?.containerId;
+  // v1 returns { status: 'success', data: { containerId } }
+  const containerId = resp.data?.data?.containerId || resp.data?.containerId;
   if (!containerId) {
-    const err = new Error('Phantombuster v1 launch failed');
-    err.data = res.data;
-    throw err;
+    throw new Error(`v1 launch failed: ${JSON.stringify(resp.data)}`);
   }
   return containerId;
 }
@@ -59,10 +56,12 @@ async function pollUntilDone(containerId) {
         headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY }
       }
     );
+
     status = statusRes.data?.status;
     if (status === 'failed') {
       throw new Error(`PhantomBuster execution failed: ${JSON.stringify(statusRes.data)}`);
     }
+
     if (status !== 'finished' && status !== 'done') {
       await sleep(POLL_INTERVAL);
     }
@@ -80,13 +79,12 @@ async function fetchOutput(containerId) {
       }
     }
   );
+
   const data = outputRes.data;
   if (Array.isArray(data)) return data;
   if (data && data.profiles) return data.profiles;
   return data || [];
 }
-
-// ---------- Main endpoint ----------
 
 app.post('/get_linkedin_profiles', async (req, res) => {
   try {
@@ -99,8 +97,8 @@ app.post('/get_linkedin_profiles', async (req, res) => {
 
     const args = { role, industry, organisation, numberOfProfiles: 10 };
 
-    // Launch with v1 (no more schema “id required” issues)
-    const containerId = await launchV1(args);
+    // **Only v1 launch**
+    const containerId = await launchViaV1(args);
 
     await pollUntilDone(containerId);
     const profiles = await fetchOutput(containerId);
@@ -114,8 +112,6 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     });
   }
 });
-
-// ---------- Boot ----------
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
