@@ -28,21 +28,21 @@ app.post('/get_linkedin_profiles', async (req, res) => {
       return res.status(500).json({ message: 'Server misconfiguration: missing PHANTOMBUSTER env vars' });
     }
 
-    // --- 1) Launch (v2) - agent ID passed as query param 'id'
-    const launchRes = await axios.post(
-      'https://api.phantombuster.com/api/v2/agents/launch',
-      { 
-        id: PHANTOM_AGENT_ID,
-        argument: { role, industry, organisation, numberOfProfiles: 10 }
-      },
-      {
-        params: { id: PHANTOM_AGENT_ID },  // Keep query param too (redundant but safe)
-        headers: {
-          'X-Phantombuster-Key-1': PHANTOM_API_KEY,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+// Launch the PhantomBuster agent
+const launchRes = await axios.post(
+  'https://api.phantombuster.com/api/v2/agents/launch',
+  {
+    id: PHANTOM_AGENT_ID,
+    argument: { role, industry, organisation, numberOfProfiles: 10 }
+  },
+  {
+    params: { id: PHANTOM_AGENT_ID },
+    headers: {
+      'X-Phantombuster-Key-1': PHANTOM_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
     const containerId = launchRes.data?.containerId;
     if (!containerId) {
       throw new Error(`Launch failed: ${JSON.stringify(launchRes.data)}`);
