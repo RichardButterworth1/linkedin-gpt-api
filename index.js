@@ -22,38 +22,13 @@ app.get('/get_linkedin_profiles', (_req, res) => res.status(405).send('Use POST'
 
 // ---------- Phantombuster helpers ----------
 
-async function launchV2(args) {
-  const res = await axios.post(
-    'https://api.phantombuster.com/api/v2/agents/launch',
-    {
-      id: PHANTOM_AGENT_ID,                         // REQUIRED in body
-      arguments: JSON.stringify(args),              // stringified!
-      output: 'json'
-    },
-    {
-      params: { id: PHANTOM_AGENT_ID },             // harmless redundancy
-      headers: {
-        'X-Phantombuster-Key-1': PHANTOM_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      validateStatus: () => true
-    }
-  );
-  const containerId = res.data?.containerId;
-  if (!containerId) {
-    const err = new Error('V2 launch failed');
-    err.data = res.data;
-    throw err;
-  }
-  return containerId;
-}
-
+// v1 launch ONLY (no more v2 launch validator headaches)
 async function launchV1(args) {
   const res = await axios.post(
     `https://api.phantombuster.com/api/v1/agent/${PHANTOM_AGENT_ID}/launch`,
     {
       output: 'json',
-      argument: JSON.stringify(args)                // stringified!
+      argument: JSON.stringify(args)
     },
     {
       headers: {
@@ -63,9 +38,10 @@ async function launchV1(args) {
       validateStatus: () => true
     }
   );
+
   const containerId = res.data?.data?.containerId || res.data?.containerId;
   if (!containerId) {
-    const err = new Error('V1 launch failed');
+    const err = new Error('Phantombuster v1 launch failed');
     err.data = res.data;
     throw err;
   }
@@ -123,13 +99,8 @@ app.post('/get_linkedin_profiles', async (req, res) => {
 
     const args = { role, industry, organisation, numberOfProfiles: 10 };
 
-    let containerId;
-    try {
-      containerId = await launchV2(args);
-    } catch (e) {
-      // If v2 schema validation keeps failing, fall back to v1 automatically
-      containerId = await launchV1(args);
-    }
+    // Launch with v1 (no more schema “id required” issues)
+    const containerId = await launchV1(args);
 
     await pollUntilDone(containerId);
     const profiles = await fetchOutput(containerId);
