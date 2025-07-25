@@ -21,11 +21,21 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     }
 
     // launch your PhantomBuster agent…
-    const launch = await axios.post(
-      'https://api.phantombuster.com/api/v2/agents/launch',
-      { id: PHANTOM_AGENT_ID, argument: { role, industry, organisation } },
-      { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
-    );
+const launch = await axios.post(
+  `https://api.phantombuster.com/api/v2/agents/launch?id=${PHANTOM_AGENT_ID}`,
+  {
+    argument: {
+      linkedinSearchUrl,
+      numberOfProfiles: 10
+    }
+  },
+  {
+    headers: {
+      'X-Phantombuster-Key-1': PHANTOM_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
     const containerId = launch.data.containerId;
 
     // ————— Poll until the container is finished —————
