@@ -22,7 +22,7 @@ app.post('/get_linkedin_profiles', async (req, res) => {
 
     // launch your PhantomBuster agent…
     const launch = await axios.post(
-      `https://api.phantombuster.com/api/v2/agents/launch`,
+      'https://api.phantombuster.com/api/v2/agents/launch',
       { id: PHANTOM_AGENT_ID, argument: { role, industry, organisation } },
       { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
     );
@@ -33,7 +33,7 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     let finished = false;
     while (!finished) {
       const statusRes = await axios.get(
-        `https://api.phantombuster.com/api/v2/containers/fetch-status?id=${containerId}`,
+        'https://api.phantombuster.com/api/v2/containers/fetch-status?id=${containerId}',
         { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
       );
 
@@ -46,11 +46,11 @@ app.post('/get_linkedin_profiles', async (req, res) => {
         // not done yet → wait then re‑check
         await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
-    }  // ← closes `while`
+    }  // ← closes 'while'
 
     // Once done, fetch the real output
     const result = await axios.get(
-      `https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}`,
+      'https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}',
       { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
     );
     const profiles = result.data.profiles || [];
@@ -68,4 +68,4 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log('Server listening on port ${PORT}'));
