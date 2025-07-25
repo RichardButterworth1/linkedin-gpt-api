@@ -28,7 +28,7 @@ app.post('/get_linkedin_profiles', async (req, res) => {
       return res.status(400).send('Missing role or organisation');
     }
 
-    // Launch the PhantomBuster agent
+    // Launch the PhantomBuster agent with correct interpolation
     const launchRes = await axios.post(
       `https://api.phantombuster.com/api/v2/agents/${PHANTOM_AGENT_ID}/launch`,
       {
@@ -43,7 +43,7 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     );
     const containerId = launchRes.data.containerId;
 
-    // Poll the container status until finished
+    // Poll the container metadata until it finishes
     const POLL_INTERVAL = 5000;
     let finished = false;
     while (!finished) {
