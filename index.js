@@ -43,30 +43,29 @@ app.post('/get_linkedin_profiles', async (req, res) => {
     const containerId = launch.data.containerId;
 
     // ————— Poll until the container is finished —————
-    const POLL_INTERVAL = 5000;  // every 5s
-    let finished = false;
-    while (!finished) {
-    // Poll until the container’s output is available
+  const POLL_INTERVAL = 5000;
+  let finished = false;
+  while (!finished) {
     const statusRes = await axios.get(
-      `https://api.phantombuster.com/api/v2/agents/fetch-output?id=${PHANTOM_AGENT_ID}`,
+      `https://api.phantombuster.com/api/v2/containers/fetch?id=${containerId}`,
       { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
     );
-    const status = statusRes.data.status || 'done';
-      if (status === 'finished' || status === 'done') {
-        finished = true;
-      } else if (status === 'failed') {
-        throw new Error('PhantomBuster execution failed');
-      } else {
-        // not done yet → wait then re‑check
-        await new Promise(r => setTimeout(r, POLL_INTERVAL));
-      }
-    }  // ← closes 'while'
+    const status = statusRes.data.status;
+    if (status === 'finished' || status === 'done') {
+      finished = true;
+    } else if (status === 'failed') {
+      throw new Error('PhantomBuster execution failed');
+    } else {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL));
+    }
+  }
+}  // ← closes 'while'
 
-    // Once done, fetch the real output
-    const result = await axios.get(
-      'https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}',
-      { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
-    );
+  // Once done, fetch the real output
+  const result = await axios.get(
+    `https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}`,
+    { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY, 'Accept': 'application/json' } }
+  );
     const profiles = result.data.profiles || [];
     res.json({ profiles });
 
