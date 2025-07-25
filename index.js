@@ -11,6 +11,7 @@ const PHANTOM_AGENT_ID = process.env.PHANTOMBUSTER_AGENT_ID;
 
 app.get('/get_linkedin_profiles', (req, res) => {
   res.status(405).send('Use POST');
+});
 
 app.post('/get_linkedin_profiles', async (req, res) => {
   try {
