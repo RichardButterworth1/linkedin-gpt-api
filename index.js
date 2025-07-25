@@ -16,17 +16,20 @@ function assertEnv() {
   if (!PHANTOM_AGENT_ID) throw new Error('Missing PHANTOMBUSTER_AGENT_ID');
 }
 
-// --- Health
+// Health
 app.get('/', (_req, res) => res.send('LinkedIn Profile API is running.'));
 app.get('/get_linkedin_profiles', (_req, res) => res.status(405).send('Use POST'));
 
-// --- Use ONLY v1 to launch (so the “id required” validator can never fire)
-async function launchViaV1(args) {
+/**
+ * Launch agent (v1 **only**)
+ * Endpoint: POST /api/v1/agent/:id/launch
+ * Body: { output: "json", argument: "<stringified JSON>" }
+ */
+async function launchV1(args) {
   const resp = await axios.post(
     `https://api.phantombuster.com/api/v1/agent/${PHANTOM_AGENT_ID}/launch`,
     {
       output: 'json',
-      // v1 expects stringified argument
       argument: JSON.stringify(args)
     },
     {
@@ -37,42 +40,49 @@ async function launchViaV1(args) {
     }
   );
 
-  // v1 returns { status: 'success', data: { containerId } }
-  const containerId = resp.data?.data?.containerId || resp.data?.containerId;
+  const containerId = resp?.data?.data?.containerId || resp?.data?.containerId;
   if (!containerId) {
     throw new Error(`v1 launch failed: ${JSON.stringify(resp.data)}`);
   }
   return containerId;
 }
 
-async function pollUntilDone(containerId) {
+/**
+ * Poll container status (v1 **only**)
+ * Endpoint: GET /api/v1/containers/fetch?id=<containerId>
+ * Returns status: running|finished|failed
+ */
+async function pollUntilDoneV1(containerId) {
   const POLL_INTERVAL = 5000;
   let status;
   do {
     const statusRes = await axios.get(
-      'https://api.phantombuster.com/api/v2/containers/fetch',
+      'https://api.phantombuster.com/api/v1/containers/fetch',
       {
-        params: { containerId },
+        params: { id: containerId },
         headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY }
       }
     );
 
-    status = statusRes.data?.status;
+    status = statusRes.data?.data?.status || statusRes.data?.status;
     if (status === 'failed') {
       throw new Error(`PhantomBuster execution failed: ${JSON.stringify(statusRes.data)}`);
     }
-
     if (status !== 'finished' && status !== 'done') {
       await sleep(POLL_INTERVAL);
     }
   } while (status !== 'finished' && status !== 'done');
 }
 
-async function fetchOutput(containerId) {
+/**
+ * Fetch output (v1 **only**)
+ * Endpoint: GET /api/v1/containers/fetch-output?id=<containerId>&output=json
+ */
+async function fetchOutputV1(containerId) {
   const outputRes = await axios.get(
-    'https://api.phantombuster.com/api/v2/containers/fetch-output',
+    'https://api.phantombuster.com/api/v1/containers/fetch-output',
     {
-      params: { containerId, output: 'json' },
+      params: { id: containerId, output: 'json' },
       headers: {
         'X-Phantombuster-Key-1': PHANTOM_API_KEY,
         'Accept': 'application/json'
@@ -80,12 +90,15 @@ async function fetchOutput(containerId) {
     }
   );
 
-  const data = outputRes.data;
-  if (Array.isArray(data)) return data;
-  if (data && data.profiles) return data.profiles;
-  return data || [];
+  // v1 wraps payload in data
+  const payload = outputRes.data?.data ?? outputRes.data;
+
+  if (Array.isArray(payload)) return payload;
+  if (payload && payload.profiles) return payload.profiles;
+  return payload || [];
 }
 
+// Main endpoint
 app.post('/get_linkedin_profiles', async (req, res) => {
   try {
     assertEnv();
@@ -97,11 +110,9 @@ app.post('/get_linkedin_profiles', async (req, res) => {
 
     const args = { role, industry, organisation, numberOfProfiles: 10 };
 
-    // **Only v1 launch**
-    const containerId = await launchViaV1(args);
-
-    await pollUntilDone(containerId);
-    const profiles = await fetchOutput(containerId);
+    const containerId = await launchV1(args);
+    await pollUntilDoneV1(containerId);
+    const profiles = await fetchOutputV1(containerId);
 
     res.json({ profiles });
   } catch (error) {
@@ -117,4 +128,5 @@ app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   console.log('Agent ID:', PHANTOM_AGENT_ID);
   console.log('API key present:', !!PHANTOM_API_KEY);
+  console.log('** THIS BUILD USES PHANTOMBUSTER API v1 ONLY (no v2 launch) **');
 });
