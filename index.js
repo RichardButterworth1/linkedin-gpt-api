@@ -13,28 +13,27 @@ const DEBUG            = (process.env.DEBUG_PHANTOM || 'false').toLowerCase() ==
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const mask  = (s, keep = 6) => (s ? s.slice(0, keep) + '…' : s);
 
+function assertEnv() {
+  if (!PHANTOM_API_KEY) {
+    throw new Error('Missing PHANTOMBUSTER_API_KEY');
+  }
+  if (!PHANTOM_AGENT_ID) {
+    throw new Error('Missing PHANTOMBUSTER_AGENT_ID');
+  }
+}
+
 // Health
 app.get('/', (_req, res) => res.send('LinkedIn Profile API is running.'));
-
-// Disallow GET on main endpoint
 app.get('/get_linkedin_profiles', (_req, res) => res.status(405).send('Use POST'));
 
-// ------ CORE HELPERS ---------------------------------------------------------
+// ------------------------------ CORE ----------------------------------------
 
-async function launchPhantomV2(args) {
-  const payload = {
-    id: PHANTOM_AGENT_ID,
-    // v2 expects *arguments* (plural) and it must be a string
-    arguments: JSON.stringify(args),
-    output: 'json'
-  };
-
+async function tryV2Launch(payload, label) {
   const res = await axios.post(
     'https://api.phantombuster.com/api/v2/agents/launch',
     payload,
     {
-      // keeping it here as well doesn't hurt, but body is what validator needs
-      params: { id: PHANTOM_AGENT_ID },
+      params: { id: PHANTOM_AGENT_ID }, // harmless redundancy
       headers: {
         'X-Phantombuster-Key-1': PHANTOM_API_KEY,
         'Content-Type': 'application/json'
@@ -44,21 +43,54 @@ async function launchPhantomV2(args) {
   );
 
   if (DEBUG) {
-    console.log('[V2 LAUNCH] status:', res.status);
-    console.log('[V2 LAUNCH] data:', JSON.stringify(res.data));
+    console.log(`[V2 ${label}] SENT:`, JSON.stringify(payload));
+    console.log(`[V2 ${label}] STATUS:`, res.status);
+    console.log(`[V2 ${label}] RESP:`, JSON.stringify(res.data));
   }
+
+  return res;
+}
+
+async function launchPhantomV2(argumentsObject) {
+  const argString = JSON.stringify(argumentsObject);
+
+  // Variant A: id + argument (singular)
+  const vA = {
+    id: PHANTOM_AGENT_ID,
+    argument: argString,
+    output: 'json'
+  };
+  let res = await tryV2Launch(vA, 'A');
   if (res.data?.containerId) return res.data.containerId;
 
-  const err = new Error('v2 launch failed');
-  err.v2Response = res.data;
+  // Variant B: id + arguments (plural)
+  const vB = {
+    id: PHANTOM_AGENT_ID,
+    arguments: argString,
+    output: 'json'
+  };
+  res = await tryV2Launch(vB, 'B');
+  if (res.data?.containerId) return res.data.containerId;
+
+  // Variant C: super defensive – duplicate id fields
+  const vC = {
+    id: PHANTOM_AGENT_ID,
+    id2: PHANTOM_AGENT_ID,
+    argument: argString,
+    output: 'json'
+  };
+  res = await tryV2Launch(vC, 'C');
+  if (res.data?.containerId) return res.data.containerId;
+
+  const err = new Error('All v2 launch variants failed');
+  err.v2A = res.data;
   throw err;
 }
 
-async function launchPhantomV1(args) {
+async function launchPhantomV1(argumentsObject) {
   const payload = {
     output: 'json',
-    // v1 accepts "argument" (singular) and it must be a string
-    argument: JSON.stringify(args)
+    argument: JSON.stringify(argumentsObject) // v1 wants "argument" stringified
   };
 
   const res = await axios.post(
@@ -74,10 +106,11 @@ async function launchPhantomV1(args) {
   );
 
   if (DEBUG) {
-    console.log('[V1 LAUNCH] status:', res.status);
-    console.log('[V1 LAUNCH] data:', JSON.stringify(res.data));
+    console.log('[V1] SENT:', JSON.stringify(payload));
+    console.log('[V1] STATUS:', res.status);
+    console.log('[V1] RESP:', JSON.stringify(res.data));
   }
-  // v1 returns { status: "success", data: { containerId: ... } }
+
   const containerId = res.data?.data?.containerId || res.data?.containerId;
   if (containerId) return containerId;
 
@@ -121,46 +154,44 @@ async function fetchOutput(containerId) {
     }
   );
   if (DEBUG) console.log('[OUTPUT]', outputRes.data);
+
   const data = outputRes.data;
   if (Array.isArray(data)) return data;
   if (data && data.profiles) return data.profiles;
   return data || [];
 }
 
-// ------ MAIN BUSINESS ROUTE --------------------------------------------------
+// --------------------------- BUSINESS ROUTE ---------------------------------
 
 app.post('/get_linkedin_profiles', async (req, res) => {
   try {
+    assertEnv();
+
     const { role, industry, organisation } = req.body;
     if (!role || !organisation) {
       return res.status(400).send('Missing role or organisation');
     }
-    if (!PHANTOM_API_KEY || !PHANTOM_AGENT_ID) {
-      return res.status(500).json({ message: 'Server misconfiguration: missing PHANTOMBUSTER env vars' });
-    }
 
     if (DEBUG) {
       console.log('[REQ BODY]', req.body);
-      console.log('Using Agent ID:', PHANTOM_AGENT_ID);
-      console.log('Using API Key (first 6):', mask(PHANTOM_API_KEY));
+      console.log('Agent ID:', PHANTOM_AGENT_ID);
+      console.log('API Key (first 6):', mask(PHANTOM_API_KEY));
     }
 
-    const phantomArgs = { role, industry, organisation, numberOfProfiles: 10 };
+    const args = { role, industry, organisation, numberOfProfiles: 10 };
 
     let containerId;
     try {
-      containerId = await launchPhantomV2(phantomArgs);
+      containerId = await launchPhantomV2(args);
     } catch (e) {
-      // If v2 schema validator still complains, fall back to v1
-      if (DEBUG) console.log('[V2 FAILED] Falling back to v1', e.v2Response);
-      containerId = await launchPhantomV1(phantomArgs);
+      if (DEBUG) console.log('[V2 FAILED] Falling back to v1');
+      containerId = await launchPhantomV1(args);
     }
 
     await pollUntilDone(containerId);
     const profiles = await fetchOutput(containerId);
 
     res.json({ profiles });
-
   } catch (error) {
     console.error(error?.response?.data || error.message);
     res.status(500).json({
@@ -170,29 +201,33 @@ app.post('/get_linkedin_profiles', async (req, res) => {
   }
 });
 
-// ------ OPTIONAL DIAGNOSTICS -------------------------------------------------
+// ----------------------------- DIAGNOSTICS ----------------------------------
 
 app.get('/debug_phantom', async (_req, res) => {
   try {
+    assertEnv();
     const testArgs = { ping: true };
-    let v2, v1;
+
+    let v2Result, v1Result, error;
     try {
-      v2 = await launchPhantomV2(testArgs);
+      v2Result = await launchPhantomV2(testArgs);
     } catch (e) {
-      v2 = { error: e.message, v2Response: e.v2Response };
+      v2Result = { error: e.message, v2A: e.v2A };
+      try {
+        v1Result = await launchPhantomV1(testArgs);
+      } catch (e2) {
+        v1Result = { error: e2.message, v1Response: e2.v1Response };
+      }
     }
-    try {
-      v1 = await launchPhantomV1(testArgs);
-    } catch (e) {
-      v1 = { error: e.message, v1Response: e.v1Response };
-    }
+
     res.json({
       env: {
-        PHANTOMBUSTER_AGENT_ID: PHANTOM_AGENT_ID,
-        PHANTOMBUSTER_API_KEY_first6: mask(PHANTOM_API_KEY),
+        PHANTOMBUSTER_AGENT_ID: PHANTOMBUSTER_AGENT_ID,
+        PHANTOMBUSTER_API_KEY_first6: mask(PHANTOMBUSTER_API_KEY)
       },
-      v2Result: v2,
-      v1Result: v1
+      v2Result,
+      v1Result,
+      error
     });
   } catch (err) {
     res.status(500).json({ error: err?.response?.data || err.message });
@@ -202,5 +237,5 @@ app.get('/debug_phantom', async (_req, res) => {
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   console.log('Agent ID:', PHANTOM_AGENT_ID);
-  console.log('API key (first 6):', mask(PHANTOM_API_KEY));
+  console.log('API key (first 6):', mask(PHANTOMBUSTER_API_KEY));
 });
