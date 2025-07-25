@@ -28,48 +28,35 @@ app.post('/get_linkedin_profiles', async (req, res) => {
       return res.status(400).send('Missing role or organisation');
     }
 
-    // Launch the PhantomBuster agent with correct interpolation
+    // Launch the PhantomBuster agent (ID in path)
     const launchRes = await axios.post(
       `https://api.phantombuster.com/api/v2/agents/${PHANTOM_AGENT_ID}/launch`,
-      {
-        argument: { role, industry, organisation, numberOfProfiles: 10 }
-      },
-      {
-        headers: {
-          'X-Phantombuster-Key-1': PHANTOM_API_KEY,
-          'Content-Type': 'application/json'
-        }
-      }
+      { argument: { role, industry, organisation, numberOfProfiles: 10 } },
+      { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY, 'Content-Type': 'application/json' } }
     );
     const containerId = launchRes.data.containerId;
 
-    // Poll the container metadata until it finishes
+    // Poll the container metadata until it finishes using path-param style
     const POLL_INTERVAL = 5000;
-    let finished = false;
-    while (!finished) {
+    let status = null;
+    do {
       const statusRes = await axios.get(
-        `https://api.phantombuster.com/api/v2/containers/fetch?id=${containerId}`,
+        `https://api.phantombuster.com/api/v2/containers/${containerId}/fetch`,
         { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY } }
       );
-      const status = statusRes.data.status;
-      if (status === 'finished' || status === 'done') {
-        finished = true;
-      } else if (status === 'failed') {
+      status = statusRes.data.status;
+      if (status === 'failed') {
         throw new Error('PhantomBuster execution failed');
-      } else {
+      }
+      if (status !== 'finished' && status !== 'done') {
         await new Promise(r => setTimeout(r, POLL_INTERVAL));
       }
-    }
+    } while (status !== 'finished' && status !== 'done');
 
-    // Fetch the real output once the run is complete
+    // Fetch the real output once complete using path-param style
     const outputRes = await axios.get(
-      `https://api.phantombuster.com/api/v2/containers/fetch-output?id=${containerId}`,
-      {
-        headers: {
-          'X-Phantombuster-Key-1': PHANTOM_API_KEY,
-          Accept: 'application/json'
-        }
-      }
+      `https://api.phantombuster.com/api/v2/containers/${containerId}/fetch-output`,
+      { headers: { 'X-Phantombuster-Key-1': PHANTOM_API_KEY, Accept: 'application/json' } }
     );
     const profiles = outputRes.data.profiles || [];
     res.json({ profiles });
